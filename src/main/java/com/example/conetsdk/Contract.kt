@@ -3,16 +3,16 @@ package com.example.conetsdk
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.FunctionReturnDecoder
 import org.web3j.abi.TypeReference
+import org.web3j.abi.datatypes.DynamicArray
 import org.web3j.abi.datatypes.Function
+import org.web3j.abi.datatypes.Type
 import org.web3j.abi.datatypes.Utf8String
-import org.web3j.crypto.Credentials
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
 import org.web3j.protocol.core.methods.request.Transaction
 import org.web3j.protocol.http.HttpService
 import org.web3j.tx.gas.ContractGasProvider
 import org.web3j.tx.gas.DefaultGasProvider
-import org.web3j.utils.Numeric
 
 object Contract {
     const val CONET_Guardian_PlanV7 = "0x35c6f84C5337e110C9190A5efbaC8B850E960384";
@@ -26,11 +26,11 @@ object Contract {
         web3j = Web3j.build(HttpService(CONET_RPC))
     }
 
-    fun callReadContract(walletAddress: String, methodName: String, contractAddress: String,) {
+    fun callReadContract(walletAddress: String, methodName: String, contractAddress: String): MutableList<out Type<Any>>? {
         val function = Function(
             methodName,
             listOf(),
-            listOf(TypeReference.create(Utf8String::class.java))
+            listOf(object: TypeReference<DynamicArray<Utf8String>>() {})
         )
 
         val encodedFunction = FunctionEncoder.encode(function);
@@ -43,17 +43,14 @@ object Contract {
             ), DefaultBlockParameterName.LATEST
         ).send()
 
-        if (response.result != null && response.result.isNotEmpty()) {
-            val decodedResult = FunctionReturnDecoder.decode(response.result, function.outputParameters)
+        val decodedResponse = FunctionReturnDecoder.decode(response.value, function.outputParameters)
 
-            println("Decoded result: $decodedResult")
+        val data = decodedResponse[0] as DynamicArray<*>
 
-            val resultString = (decodedResult[0] as Utf8String).value
-            println("Decoded response: $resultString")
-        } else {
-            println("No result returned from contract call.")
-        }
+        val resultList = data.value
 
-        println("RESPONSE: " + Numeric.toBigInt(response.result))
+        println("RESULT LIST: $resultList")
+
+        return resultList
     }
 }
