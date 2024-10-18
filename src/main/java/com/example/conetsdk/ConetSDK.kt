@@ -7,6 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import org.web3j.abi.TypeReference
+import org.web3j.abi.datatypes.Utf8String
 import org.web3j.crypto.Bip32ECKeyPair
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.MnemonicUtils
@@ -31,17 +33,13 @@ object ConetSDK {
         println("CURRENT WALLET: $currentWallet")
 
         if (currentWallet != null) {
-            credentials = Credentials.create(currentWallet["privateKeyArmor"])
+            credentials = Credentials.create(currentWallet["privateKeyArmor"] as String)
         }
-
-        // Temporary
-        editor.clear()
-        editor.apply()
     }
 
-    fun getLocalWallet(): Map<String, String>? {
-        val keys = listOf("mnemonic", "private-key", "address")
-        val walletData = mutableMapOf<String, String>()
+    fun getLocalWallet(): Map<String, Any>? {
+        val keys = listOf("publicKeyArmor", "keyID", "isPrimary", "referrer", "isNode", "privateKeyArmor", "hdPath", "index")
+        val walletData = mutableMapOf<String, Any>()
 
         for (key in keys) {
             val value = preferences.getString(key, null)
@@ -50,9 +48,19 @@ object ConetSDK {
             }
         }
 
-        return if (walletData.size == keys.size) {
+        val pgpPrivateKey = preferences.getString("private-key", null)
+        val pgpPublicKey = preferences.getString("public-key", null)
+
+        walletData["pgpKey"] = mapOf(
+            "private-key" to pgpPrivateKey,
+            "public-key" to pgpPublicKey
+        )
+
+        return if (walletData.size == keys.size + 1 && (walletData["pgpKey"] as Map<*, *>).size == 2) {
             walletData
         } else {
+            editor.clear()
+            editor.apply()
             null
         }
     }
@@ -93,11 +101,21 @@ object ConetSDK {
     }
 
     fun getAllNodes(): String {
-        contract.callReadContract(
-            credentials.address,
-            "getAllRegions",
-            CONET_GUARDIAN_NODES_CONTRACT_ADDRESS
-        )
+        for (i in 100..180) {
+            val node = contract.callReadContract(
+                credentials.address,
+                "getNodeInfoById",
+                CONET_GUARDIAN_NODES_CONTRACT_ADDRESS,
+                listOf(
+                    object : TypeReference<Utf8String>() {},
+                    object : TypeReference<Utf8String>() {},
+                    object : TypeReference<Utf8String>() {}
+                ),
+                i
+            )
+
+            println("NODE: $node")
+        }
 
         return "nodes"
     }
@@ -133,9 +151,9 @@ object ConetSDK {
             "privateKeyArmor" to walletInfo["private-key"],
             "hdPath" to "",
             "index" to 0,
-        );
+        )
 
-        return wallet;
+        return wallet
     }
 
     fun createWalletIfNotExists(passphrase: String = "", name: String = "", email: String = ""): Map<String, Any?> {
